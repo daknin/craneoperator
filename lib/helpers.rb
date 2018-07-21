@@ -50,7 +50,11 @@ module Helpers
         puts "  -  " + error['code'].to_s + ": " + error['message']
       end
     end
-    return json
+    headers=response.headers.clone
+    return {
+        :headers => headers,
+        :json => json
+    }
   end
 
   def get_head(url, config, session, headers={})

@@ -44,17 +44,43 @@ class CraneOp < Sinatra::Base
 
   def fetch_catalog(next_string=nil)
     query={n: 100, last: next_string}
-    json = get("/v2/_catalog", conf, session, {}, query)
+    response = get("/v2/_catalog", conf, session, {}, query)
+    json = response[:json]
     if json['errors']
       return json
     end
     return [] if json['repositories'].nil?
     repos = []
     repos += json['repositories']
-    unless json['repositories'].empty?
+    if response[:headers].has_key?("link")
       repos += fetch_catalog(repos.last)
     end
     return repos
+  end
+
+  def fetch_catalog2(next_string="/v2/_catalog")
+    query={n: 100, last: next_string}
+    response = get(next_string, conf, session, {}, query)
+    json = response["json"]
+    if json['errors']
+      return json
+    end
+    return [] if json['repositories'].nil?
+    repos = []
+    repos += json['repositories']
+    unless response["headers"]["link"].empty?
+      repos += fetch_catalog(parse_link_header2(response["headers"]["link"])[:next])
+    end
+    return repos
+  end
+
+  def parse_link_header2(link)
+    section = link.split(';')
+    url = section[0][/<(.*)>/,1]
+    name = section[1][/rel="(.*)"/,1].to_sym
+    return {
+        name => url
+    }
   end
 
   def containers(filter=nil)
@@ -67,7 +93,7 @@ class CraneOp < Sinatra::Base
   end
 
   def container_tags(repo, filter=nil)
-    json = get("/v2/#{repo}/tags/list", conf, session)
+    json = get("/v2/#{repo}/tags/list", conf, session)["json"]
     return nil if json['tags'].nil?
     tags = json['tags'] || []
     if filter
@@ -77,7 +103,7 @@ class CraneOp < Sinatra::Base
   end
 
   def container_info(repo, manifest)
-    json = get("/v2/#{repo}/manifests/#{manifest}", conf, session)
+    json = get("/v2/#{repo}/manifests/#{manifest}", conf, session)["json"]
 
     # Add extra fields for easy display
     if json['history']
